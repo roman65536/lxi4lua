@@ -1,0 +1,137 @@
+\documentclass[a4paper,13pt]{article}
+\usepackage[left=1cm,right=1cm,top=1.5cm,bottom=1.5cm,includeheadfoot]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[table]{xcolor}
+\usepackage{pdfpages}
+\usepackage[pdfborderstyle={/S/U/W 1},colorlinks=true, linkcolor=blue]{hyperref}
+\usepackage{longtable}
+\usepackage{luacode}
+
+\xdefinecolor{TableLightGray}{rgb}{0.90,0.90,0.90}
+
+
+\hypersetup{
+ pdftitle={LXI/SCPI Example in lualatex},
+ pdfauthor={Roman Pollak},
+ pdfsubject={Example}
+}
+
+
+\directlua{package.cpath = "./lxit.so" }
+\directlua{drv=require("lxit")}
+
+
+\begin{document}
+
+\title{\Huge{LXI/SCPI Example in LuaLaTeX}}
+\date{\today}
+\maketitle
+
+
+\begin{luacode*}
+
+
+
+
+  function meas(con,file,max_v,max_i)
+  call_scpi(dev,":POWERS:OUTP1 ON")
+  for v=1,max_v,.1 do
+  call_scpi(con,string.format(":POWERS:OUTP1:VOLT %.1f",v))
+     lxi_sleep(1)
+     val=tonumber(lxi_scpi(con,":DMM:VALue?"))
+     if val > max_i then
+     lxi_scpi(con,":POWERS:OUTP1 OFF")
+     return
+     end
+     print(string.format("V %.1f I %f A\n",v,val))
+     file:write(string.format("V %.1f I %f A\n",v,val))
+     --lxi_sleep(1)
+  end
+  call_scpi(con,":POWERS:OUTP1 OFF")
+  call_scpi(con,string.format(":POWERS:OUTP1:VOLT 0"))
+  end
+
+  
+
+ function conv_m(text)
+
+ text=string.gsub(text,"&#39","\\verb|'|")
+ text=string.gsub(text,"&#40","(")
+ text=string.gsub(text,"&#41",")")
+ text=string.gsub(text,"&","\\verb|&|")
+ text=string.gsub(text,"#","\\verb|#|")
+ text=string.gsub(text,"_","\\textunderscore{}")
+ --text=string.gsub(text,"^","\\verb|^|")
+ text=string.gsub(text,"/","/\\allowbreak{}")
+ --text=string.gsub(text,"%c","")
+ test=string.gsub(text,"\026","")
+
+return text
+end
+
+
+function split_string(inputstr, sep)
+    if sep == nil then
+        sep = "%s"
+    end
+    local t = {}
+    for part in string.gmatch(inputstr, "([^" .. sep .. "]+)") do
+        table.insert(t, part)
+    end
+    return t
+end
+
+function text_prompt(msg)
+  io.write(msg)
+  io.flush()
+  return io.read()
+end
+
+function call_scpi(con,msg)
+lxi_scpi(con,msg)
+err_msg=lxi_scpi(con,"SYSTem:ERRor?")
+print(err_msg)
+end
+
+addr=text_prompt("Please give the Name or IP Address of the LXI/SCPI Device? :")
+dev=lxi_connect(addr,nil, nil, 2000, "RAW")
+dev_id=lxi_scpi(dev,"*IDN?")
+print(dev_id)
+result=split_string(dev_id,",")
+print(result)
+
+  tex.sprint("\\section{Measurement Equipment}")
+  tex.sprint("\\rowcolors{2}{TableLightGray}{white}")
+  tex.sprint("\\begin{longtable}{p{5cm}p{7cm}}")
+  tex.sprint("\\\\")
+  tex.sprint("Device Manufacturer & " .. conv_m(result[1]) .. "\\\\")
+  tex.sprint("Model & " .. conv_m(result[2]) .."\\\\")
+  tex.sprint("Serial Nr. & " .. conv_m(result[3]) .. "\\\\")
+  tex.sprint("Firmware & " .. conv_m(result[4]) .. "\\\\")
+  tex.sprint("\\end{longtable}")
+
+
+  print("Setup Measurement")
+  call_scpi(dev,":POWERS:OUTP1:VOLT 1")
+  call_scpi(dev,":POWERS:OUTP1 ON")
+  lxi_scpi(dev,":DMM:STATE ON")
+  lxi_scpi(dev,":DMM:MODe DCMA")
+ 
+  lxi_sleep(2)
+
+  file = io.open ("led_data.dat", "w")
+  led={"Ir","Red","Yellow","Green","Blue","White","Uv"}
+  for a in pairs(led)
+  do
+  text_prompt("Ready to meassure "..led[a].." Led?")
+  file:write(string.format("\"%s LED\"\n",led[a]))
+  meas(dev,file,4,.050)
+  file:write("\n\n")
+  end
+  file:close()
+\end{luacode*}
+
+
+
+\end{document}
+
